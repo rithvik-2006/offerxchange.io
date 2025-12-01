@@ -4,9 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, Tag, User, AlertCircle } from 'lucide-react'
+import { claimOffer } from '@/app/actions/claimOffer'
 
+// ...existing code...
 interface Offer {
-  reserved_by: any
   id: string
   title: string
   description: string
@@ -16,7 +17,10 @@ interface Offer {
   status: string
   owner_id: string
   created_at: string
+  reserved_by?: string | null
+  reserved_at?: string | null
 }
+// ...existing code...
 
 interface Profile {
   name: string
@@ -91,42 +95,22 @@ export default function OfferDetails() {
     setMessage(null)
 
     try {
-      // Atomic reservation
-      const { data: reserved, error: reserveError } = await supabase
-        .from('offers')
-        .update({ 
-          status: 'reserved', 
-          reserved_by: user.id, 
-          reserved_at: new Date().toISOString() 
-        })
-        .eq('id', offerId)
-        .eq('status', 'available')
-        .select()
+      // Use the server action for atomic claiming
+      const result = await claimOffer(offerId, user.id)
 
-      if (reserveError || !reserved || reserved.length === 0) {
-        setMessage({ type: 'error', text: 'This offer has already been claimed by someone else!' })
+      if (!result.success) {
+        setMessage({ type: 'error', text: result.message })
+        // Refresh offer data to show updated status
+        await fetchOffer()
         setClaiming(false)
-        // Refresh offer data
-        fetchOffer()
         return
       }
 
-      // Create claim record
-      const { error: claimError } = await supabase
-        .from('claims')
-        .insert({ offer_id: offerId, claimer_id: user.id })
-
-      if (claimError) throw claimError
-
-      // Mark as claimed
-      await supabase
-        .from('offers')
-        .update({ status: 'claimed' })
-        .eq('id', offerId)
-        .eq('reserved_by', user.id)
-
-      setMessage({ type: 'success', text: 'Offer claimed successfully! Redirecting...' })
+      setMessage({ type: 'success', text: result.message + ' Redirecting...' })
       
+      // Refresh offer to get the updated data including coupon code
+      await fetchOffer()
+
       setTimeout(() => {
         router.push('/dashboard/claimed-offers')
       }, 2000)
@@ -171,6 +155,7 @@ export default function OfferDetails() {
 
   const isExpired = new Date(offer.expiry_date) < new Date()
   const canClaim = offer.status === 'available' && !isExpired && offer.owner_id !== user?.id
+  const isClaimed = offer.status === 'claimed' && offer.reserved_by === user?.id
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -186,10 +171,20 @@ export default function OfferDetails() {
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
           {/* Status Badge */}
-          {offer.status !== 'available' && (
+          {offer.status !== 'available' && !isClaimed && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
               <p className="text-yellow-800 dark:text-yellow-300 font-semibold">
                 This offer is no longer available
+              </p>
+            </div>
+          )}
+
+          {/* Success Badge for Claimed by User */}
+          {isClaimed && (
+            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-green-800 dark:text-green-300 font-semibold flex items-center gap-2">
+                <AlertCircle size={20} />
+                You have successfully claimed this offer!
               </p>
             </div>
           )}
@@ -238,13 +233,25 @@ export default function OfferDetails() {
             </div>
           </div>
 
-          {/* Coupon Code (if available) */}
-          {offer.coupon_code && offer.status === 'claimed' && offer.reserved_by === user?.id && (
-            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Coupon Code</p>
-              <p className="text-2xl font-mono font-bold text-green-700 dark:text-green-400">
-                {offer.coupon_code}
-              </p>
+          {/* Coupon Code (if available and claimed by user) */}
+          {offer.coupon_code && isClaimed && (
+            <div className="mb-6 p-6 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-2 border-green-500 dark:border-green-700 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 font-semibold">Your Coupon Code</p>
+              <div className="flex items-center justify-between">
+                <p className="text-3xl font-mono font-bold text-green-700 dark:text-green-400">
+                  {offer.coupon_code}
+                </p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(offer.coupon_code!)
+                    setMessage({ type: 'success', text: 'Coupon code copied!' })
+                    setTimeout(() => setMessage(null), 2000)
+                  }}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm"
+                >
+                  Copy Code
+                </button>
+              </div>
             </div>
           )}
 
@@ -253,15 +260,21 @@ export default function OfferDetails() {
             <button
               onClick={handleClaim}
               disabled={claiming}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-4 rounded-lg text-lg transition duration-200"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-4 rounded-lg text-lg transition duration-200 disabled:cursor-not-allowed"
             >
               {claiming ? 'Claiming...' : 'Claim This Offer'}
             </button>
           )}
 
-          {!canClaim && offer.owner_id === user?.id && (
+          {!canClaim && !isClaimed && offer.owner_id === user?.id && (
             <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
               <p className="text-gray-600 dark:text-gray-400">This is your own offer</p>
+            </div>
+          )}
+
+          {isExpired && (
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-center">
+              <p className="text-red-700 dark:text-red-300 font-semibold">This offer has expired</p>
             </div>
           )}
         </div>
