@@ -7,6 +7,7 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata = {
   title: 'Xchange - Share & Claim Coupons',
   description: 'Exchange unused digital coupons and offers',
+  icons:"logo.svg"
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
