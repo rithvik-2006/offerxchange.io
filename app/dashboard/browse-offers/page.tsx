@@ -1,3 +1,4 @@
+
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -57,9 +58,14 @@ export default function BrowseOffers() {
       .eq('status', 'available')
       .gte('expiry_date', new Date().toISOString())
 
+    if (error) {
+      console.error('We could not fetch the offers', error)
+      setLoading(false)
+      return
+    }
+
     if (data) {
       setOffers(data)
-      // Extract unique categories
       const uniqueCategories = [...new Set(data.map(offer => offer.category))]
       setCategories(uniqueCategories)
     }
@@ -69,16 +75,18 @@ export default function BrowseOffers() {
   const applyFiltersAndSort = () => {
     let filtered = [...offers]
 
-    // Filter by category
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(offer => offer.category === selectedCategory)
     }
 
-    // Sort
     if (sortBy === 'expiry') {
-      filtered.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
+      filtered.sort(
+        (a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+      )
     } else if (sortBy === 'newest') {
-      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      filtered.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
     }
 
     setFilteredOffers(filtered)
@@ -86,7 +94,11 @@ export default function BrowseOffers() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
   }
 
   const getDaysUntilExpiry = (expiryDate: string) => {
@@ -97,130 +109,219 @@ export default function BrowseOffers() {
     return diffDays
   }
 
+  // just UI colors changed to match dark glossy theme
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
-      food: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-      travel: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-      shopping: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-      'bill payments': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-      entertainment: 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300',
-      default: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+      food: 'border-amber-400/60 bg-amber-500/10 text-amber-100',
+      travel: 'border-sky-400/60 bg-sky-500/10 text-sky-100',
+      shopping: 'border-fuchsia-400/60 bg-fuchsia-500/10 text-fuchsia-100',
+      'bill payments': 'border-emerald-400/60 bg-emerald-500/10 text-emerald-100',
+      entertainment: 'border-pink-400/60 bg-pink-500/10 text-pink-100',
+      default: 'border-slate-500/60 bg-slate-700/40 text-slate-100'
     }
-    return colors[category.toLowerCase()] || colors.default
+    return (
+      'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ' +
+      (colors[category.toLowerCase()] || colors.default)
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <nav className="bg-white dark:bg-gray-800 shadow-sm p-4">
-        <div className="container mx-auto flex items-center gap-4">
-          <Link href="/dashboard" className="text-gray-600 dark:text-gray-300 hover:text-blue-600">
-            <ArrowLeft size={24} />
-          </Link>
-          <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">Browse Offers</h1>
+    <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+      {/* background glows */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(168,85,247,0.25),_transparent_60%),radial-gradient(circle_at_bottom,_rgba(56,189,248,0.18),_transparent_55%)]"
+        aria-hidden="true"
+      />
+
+      {/* top nav */}
+      <nav className="border-b border-white/5 bg-slate-950/70 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-slate-900/70 p-2 hover:bg-slate-800 hover:border-violet-500/60 transition"
+            >
+              <ArrowLeft size={18} />
+            </Link>
+            <div className="flex flex-col">
+              <span className="text-[11px] uppercase tracking-[0.22em] text-slate-400">
+                Discover
+              </span>
+              <h1 className="text-lg font-semibold tracking-tight text-slate-50">
+                Browse Offers
+              </h1>
+            </div>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-3 text-xs text-slate-300">
+            <Tag size={16} />
+            <span className="uppercase tracking-[0.2em] text-slate-400">
+              {filteredOffers.length} {filteredOffers.length === 1 ? 'offer' : 'offers'} live
+            </span>
+          </div>
         </div>
       </nav>
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Filters and Sort */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Category Filter */}
-            <div>
-              <label className="flex items-center gap-2 text-sm font-semibold mb-2">
-                <Filter size={18} />
-                Filter by Category
-              </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="all">All Categories</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+      {/* main */}
+      <main className="flex-1 w-full">
+        <div className="max-w-6xl mx-auto px-4 py-10 space-y-8">
+          {/* hero + filters card */}
+          <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            {/* hero text */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-violet-300/80">
+                Community savings
+              </p>
+              <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-50">
+                Find an offer that fits your next purchase.
+              </h2>
+              <p className="text-sm text-slate-400 max-w-xl">
+                Filter by category, sort by expiry, and claim coupons shared by the community
+                before they&apos;re gone.
+              </p>
             </div>
 
-            {/* Sort */}
-            <div>
-              <label className="flex items-center gap-2 text-sm font-semibold mb-2">
-                <Clock size={18} />
-                Sort By
-              </label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="newest">Newest First</option>
-                <option value="expiry">Expiring Soon</option>
-              </select>
-            </div>
-          </div>
-        </div>
+            {/* filters card */}
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-0 blur-2xl bg-violet-500/25" />
+              <div className="relative rounded-3xl border border-white/10 bg-slate-900/70 px-5 py-5 shadow-[0_24px_60px_rgba(15,23,42,0.95)] backdrop-blur-2xl space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Filter size={18} className="text-violet-300" />
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
+                      Refine results
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    {filteredOffers.length} matching offers
+                  </span>
+                </div>
 
-        {/* Results Count */}
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          {filteredOffers.length} {filteredOffers.length === 1 ? 'offer' : 'offers'} available
-        </p>
-
-        {/* Offers Grid */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-          </div>
-        ) : filteredOffers.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-12 text-center">
-            <p className="text-gray-500 dark:text-gray-400 text-lg">No offers available</p>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredOffers.map(offer => {
-              const daysLeft = getDaysUntilExpiry(offer.expiry_date)
-              const isExpiringSoon = daysLeft <= 3
-
-              return (
-                <Link
-                  key={offer.id}
-                  href={`/dashboard/browse-offers/${offer.id}`}
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group"
-                >
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getCategoryColor(offer.category)}`}>
-                        {offer.category}
-                      </span>
-                      {isExpiringSoon && (
-                        <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 rounded-full text-xs font-semibold flex items-center gap-1">
-                          <Clock size={12} />
-                          {daysLeft}d left
-                        </span>
-                      )}
-                    </div>
-
-                    <h3 className="text-xl font-bold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                      {offer.title}
-                    </h3>
-                    
-                    <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
-                      {offer.description}
-                    </p>
-
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500 dark:text-gray-500">
-                        Expires: {formatDate(offer.expiry_date)}
-                      </span>
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold group-hover:translate-x-1 transition">
-                        View →
-                      </span>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* category filter */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                      Category
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full appearance-none rounded-2xl border border-slate-700/80 bg-slate-900/80 px-4 py-3 text-sm text-slate-100 outline-none shadow-[0_0_0_1px_rgba(15,23,42,0.9)] focus:border-violet-500/70 focus:shadow-[0_0_0_1px_rgba(139,92,246,0.8)] focus:ring-2 focus:ring-violet-500/60"
+                      >
+                        <option value="all" className="bg-slate-900">
+                          All categories
+                        </option>
+                        {categories.map(cat => (
+                          <option key={cat} value={cat} className="bg-slate-900">
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-500 text-xs">
+                        ▾
+                      </div>
                     </div>
                   </div>
-                </Link>
-              )
-            })}
-          </div>
-        )}
+
+                  {/* sort filter */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                      <Clock size={16} />
+                      Sort by
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="w-full appearance-none rounded-2xl border border-slate-700/80 bg-slate-900/80 px-4 py-3 text-sm text-slate-100 outline-none shadow-[0_0_0_1px_rgba(15,23,42,0.9)] focus:border-violet-500/70 focus:shadow-[0_0_0_1px_rgba(139,92,246,0.8)] focus:ring-2 focus:ring-violet-500/60"
+                      >
+                        <option value="newest" className="bg-slate-900">
+                          Newest first
+                        </option>
+                        <option value="expiry" className="bg-slate-900">
+                          Expiring soon
+                        </option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-500 text-xs">
+                        ▾
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* offers grid */}
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <div className="relative h-12 w-12">
+                <div className="absolute inset-0 rounded-full border-4 border-violet-500/60 border-t-transparent animate-spin" />
+                <div className="absolute inset-2 rounded-full bg-slate-900/80" />
+              </div>
+            </div>
+          ) : filteredOffers.length === 0 ? (
+            <div className="relative mx-auto max-w-xl rounded-3xl border border-white/10 bg-slate-900/70 px-8 py-12 text-center shadow-[0_24px_60px_rgba(15,23,42,0.95)] backdrop-blur-2xl">
+              <div className="pointer-events-none absolute inset-x-12 -top-6 h-px bg-gradient-to-r from-transparent via-violet-500/70 to-transparent" />
+              <p className="text-sm text-slate-400">
+                No offers match your filters right now. Try changing the category or check again
+                later — new coupons are added all the time.
+              </p>
+            </div>
+          ) : (
+            <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {filteredOffers.map(offer => {
+                const daysLeft = getDaysUntilExpiry(offer.expiry_date)
+                const isExpiringSoon = daysLeft <= 3
+
+                return (
+                  <Link
+                    key={offer.id}
+                    href={`/dashboard/browse-offers/${offer.id}`}
+                    className="group relative overflow-hidden rounded-3xl border border-white/5 bg-slate-900/70 px-5 py-5 shadow-[0_24px_60px_rgba(15,23,42,0.95)] backdrop-blur-2xl transition hover:border-violet-500/70 hover:shadow-[0_30px_90px_rgba(109,40,217,0.85)]"
+                  >
+                    {/* glow */}
+                    <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gradient-to-br from-violet-500/35 via-fuchsia-500/30 to-sky-500/10 blur-3xl opacity-70 group-hover:opacity-100 transition" />
+
+                    <div className="relative space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className={getCategoryColor(offer.category)}>
+                          <Tag size={10} />
+                          {offer.category}
+                        </span>
+
+                        {isExpiringSoon && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/60 bg-rose-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-100">
+                            <Clock size={10} />
+                            {daysLeft}d left
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-slate-50 group-hover:text-violet-100 transition">
+                          {offer.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-400 line-clamp-2">
+                          {offer.description}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Expires {formatDate(offer.expiry_date)}</span>
+                        <span className="inline-flex items-center font-medium text-violet-200 group-hover:translate-x-1 group-hover:text-violet-100 transition">
+                          View details
+                          <span className="ml-1">→</span>
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </section>
+          )}
+        </div>
       </main>
     </div>
   )
